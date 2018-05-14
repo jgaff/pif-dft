@@ -139,29 +139,43 @@ class VaspParser(DFTParser):
         # Open up the OUTCAR
         with open(self.outcar) as fp:
             #store the number of atoms and number of irreducible K-points
-            for line in fp:
-                if "number of ions     NIONS =" in line:
-                    words = line.split()
-                    NI = int(words[11])
-                elif "k-points           NKPTS =" in line:
-                    words = line.split()
-                    NIRK = float(words[3])
+            NI = None
+            NIRK = None
+            try:
+                for line in fp:
+                    if "number of ions     NIONS =" in line:
+                        words = line.split()
+                        NI = int(words[11])
+                    elif "k-points           NKPTS =" in line:
+                        words = line.split()
+                        NIRK = float(words[3])
+            except Exception as e:
+                return None
             #check if the number of k-points was reduced by VASP if so, sum all the k-points weight
             if "irreducible" in open(self.outcar).read():
                 fp.seek(0)
-                for line in fp:
-                    #sum all the k-points weight
-                    if "Coordinates               Weight" in line:
-                        NK=0; counter = 0
-                        for line in fp:
-                            if counter == NIRK:
-                                break
-                            NK += float(line.split()[3])
-                            counter += 1
-                return Value(scalars=[Scalar(value=NI*NK)])
+                NK = None
+                try:
+                    for line in fp:
+                        #sum all the k-points weight
+                        if "Coordinates               Weight" in line:
+                            NK=0; counter = 0
+                            for line in fp:
+                                if NIRK is not None and counter == NIRK:
+                                    break
+                                NK += float(line.split()[3])
+                                counter += 1
+                except Exception as e:
+                    return None
+                if NI is not None and NK is not None:
+                    return Value(scalars=[Scalar(value=NI*NK)])
+                else:
+                    return None
             #if k-points were not reduced KPPRA equals the number of atoms * number of irreducible k-points
-            else:
+            elif NI is not None and NIRK is not None:
                 return Value(scalars=[Scalar(value=NI*NIRK)])
+            else:
+                return None
 
     def _is_converged(self):
         # Follows the procedure used by qmpy, but without reading the whole file into memory
